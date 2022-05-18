@@ -2,9 +2,9 @@
 // esp32_ioticos_broker_hello_world, por la plataforma 
 // ioticos disponible en el repositorio 
 // https://github.com/ioticos/esp32_ioticos_broker_hello_world/blob/master/src/main.cpp
-// y adaptado al seminario de Domotica basica con Tecnologia IoT
+// y adaptado al Curso de Domotica basica con Tecnologia IoT
 // presentado por el Ing. Fabian Barreto docente 
-// tiempo completo de la Unisangil
+// tiempo completo  UNISANGIL
 
 
 // Importar de libreas necesarias para el proyecto
@@ -14,48 +14,41 @@
 #include "DHT.h"  // Libreria para el modulo de temperatura y humedad DHT11
 
 // Definición de Pines digitales necesario y configuración de sensorer DHT11
-#define DHTPIN 4
-#define DHTTYPE DHT11
+#define DHTPIN 4 // Definición del Pin lectura sensor 
+#define DHTTYPE DHT11 // Configuración del tipo sensor
 
-DHT dht(DHTPIN, DHTTYPE);
-
-// Definición  pines Sensro de proximidad
-const int trigPin = 2;
-const int echoPin = 5;
-
-// Definición de  variables para caltulo de distanción y temperatura 
-long duration;
-int distance;
-String stringapublicar; 
-String temperatura;
+DHT dht(DHTPIN, DHTTYPE); // Definición del constructor 
 
 
 //*********** Comunicación MQTT CONFIGURACIÓN **************
 //**************************************
-const char *mqtt_server = "ioticos.org"; // host de conexión al broker o URL del Servidor 
+const char *mqtt_server = "broker.emqx.io"; // host de conexión al broker o URL del Servidor 
 const int mqtt_port = 1883; // Puerto de coneción 
-const char *mqtt_user = "MCi5y3W4gM2p038"; // Usuario 
-const char *mqtt_pass = "PVok4vVgerhptvV"; // Contraseña 
-const char *root_topic_subscribe = "CiyVn6Ykbe6eD7i/input"; // Topico de subscripción 
-const char *root_topic_publish = "CiyVn6Ykbe6eD7i/output"; // Topico para publicar 
-const char *root_topic_publish_temperatura = "CiyVn6Ykbe6eD7i/temperatura"; // Topico para manejo de temperatura
+const char *root_topic_subscribe = "Led/esp32"; // Topico de subscripción 
+const char *root_topic_publish = "Temperatura/public_esp32"; // Topico para manejo de temperatura
 
 
 //**************************************
 //*********** WIFICONFIG ***************
 //**************************************
-const char* ssid = "FAMILIA BARRETO SANCHEZ";
-const char* password =  "GERMAN2018BARRETO";
+const char* ssid = "UNISANGIL YOPAL";
+const char* password =  "";
 
 
 
 //**************************************
 //*********** Variables GLOBALES   ***************
 //**************************************
-WiFiClient espClient;
-PubSubClient client(espClient);
-char msg[57]; // Longitud del mensaje general
-char msgTem[20];// Longitud del mensaje  de temperatura
+WiFiClient espClient; // Definición del constructor para el internet 
+PubSubClient client(espClient); // Definición del constructor para el broker
+
+int ledpin =2; // Definimos el pin para el led interndo de la esp32
+
+int var = 0; // variable auxiliar 
+int ledval = 0; // valor incial del led apagado
+char datos[40]; // variable para almacenar los mensajes
+String resultS = ""; // Variable para los resultados 
+
 
 
 
@@ -67,63 +60,56 @@ void reconnect();  //  Función para reconexión a broker
 void setup_wifi(); // Función para conexión a la red WIFI 
 
 
-// Función Setup principar del programa
+// Función Setup, se ejecuta una vez en el programa
 void setup() {
-  Serial.begin(9600);
-  setup_wifi();
+  pinMode(ledpin,OUTPUT); // Definición de puerto como salida para prender el led
+  Serial.begin(9600); // Se inicia la comunicación serial
+  /// Iniciación de sensores
+  dht.begin(); // Inicia el funcionamiento del sensor DHT11
+  delay(100);// Tiempo para Inicios de los proceso 
+  setup_wifi(); // Metodo para conectarse a la red WIFI
   client.setServer(mqtt_server, mqtt_port); // Definición de servidor broker Mqtt
   client.setCallback(callback); // Defición de la función Callback para recibir mensajes 
 
-  /// Iniciación de sensores
-  pinMode(trigPin, OUTPUT); // Establece el trigPin como una salida
-  pinMode(echoPin, INPUT); // Establece el echoPin como una entrada
-  dht.begin(); // Inicia el funcionamiento del sensor DHT11
+  
 }
 
 void loop() {
   // Funcion para conectar al broker mqtt
   if (!client.connected()) {
-    reconnect();
+    reconnect(); // Función de reconección al broker
   }
+
+  Serial.print("Datos desde el Cliente PC: "); // Imprime en consola la información enviada desde el cliente pc
+  Serial.println(resultS);
 
   if (client.connected()){
 
-    // Limpieza de los pines the trigPin
-    digitalWrite(trigPin, LOW);
-    delayMicroseconds(10);
-    
-    // Establece el trigPin en estado ALTO durante 10 microsegundos
-    digitalWrite(trigPin, HIGH);
-    delayMicroseconds(10);
-    digitalWrite(trigPin, LOW);
-
-    // Lee el echoPin, devuelve el tiempo de viaje de la onda de sonido en microsegundos
-    duration = pulseIn(echoPin, HIGH);
-
-    // Calculo de la distacia en cm
-    distance= duration*0.034/2;
-
+    if(var == 0)
+    {
+      digitalWrite(ledpin,LOW); // Apaga el led cuando recibe un cero desde el pc
+    }
+     else if (var == 1) 
+    {
+      digitalWrite(ledpin,HIGH);// Prende el led  cuando recibe un uno desdel pc
+    }
 
     //Lectura de temperatura y humedad
-    float h = dht.readHumidity();
-    float t = dht.readTemperature();
+    float hum = dht.readHumidity();
+    float tem = dht.readTemperature();
     
     // Creación de sting para enviar 
-    stringapublicar = "Distancia: " + String(distance) + " Cm; "+"Humedad: "+ h+"%;"+ "Temperatura: " + t +"°C";
-    temperatura = "Temperatura: " + String(t) +"°C";
 
-    
-    // No se pueden enviar un string al broker, se convierte en un char array
-    stringapublicar.toCharArray(msg,57);
-    client.publish(root_topic_publish,msg);
+     Serial.println("Datos del Sensor DHT11: Temperatura: "  + String(tem) +"°C, Humedad: "+ String(hum) + "%");
 
+     String tem_string = String(tem); // Convierte los datos en string
+     String hum_string = String(hum);
 
-
-    temperatura.toCharArray(msgTem,20);
-    client.publish(root_topic_publish_temperatura,msgTem);
-    delay(3000);
+     sprintf(datos, "Valor Temperatura: %s °C, Valor Humedad: %s" ,tem_string,hum_string ); // Concatenar las mediciones de temperatura y humedad 
+     client.publish(root_topic_publish,datos); // publica los datos en el broker
+     delay(2000); // Tiempo de espera de 2 segundos
   }
-  // Se envie la broker ojo con este funcion 
+  // Función loop para el envio de datos
   client.loop();
 }
 
@@ -140,13 +126,16 @@ void setup_wifi(){
   Serial.print("Conectando a ssid: ");
   Serial.println(ssid);
 
+  // Inicia la conección al wifi
+
   WiFi.begin(ssid, password);
 
+// Espera a que se conecte a la red
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
-
+// se conecta a la red
   Serial.println("");
   Serial.println("Conectado a red WiFi!");
   Serial.println("Dirección IP: ");
@@ -162,12 +151,10 @@ void setup_wifi(){
 void reconnect() {
 
   while (!client.connected()) {
-    Serial.print("Intentando conexión Mqtt...");
-    // Creamos un cliente ID ojo si son varios clientes definir diferentes clienId
-    String clientId = "CLIENTE_ID_H_W_";
-    clientId += String(random(0xffff), HEX); // se genera un cliente id ramdom para evitar problemas 
+    Serial.print("Intentando conectarse MQTT...");
+    
     // Intentamos conectar
-    if (client.connect(clientId.c_str(),mqtt_user,mqtt_pass)) {
+    if (client.connect("ESP32Client")) {
       Serial.println("Conectado!");
       // Nos suscribimos
       if(client.subscribe(root_topic_subscribe)){
@@ -175,6 +162,7 @@ void reconnect() {
       }else{
         Serial.println("fallo Suscripciión");
       }
+      // Error de conexión 
     } else {
       Serial.print("falló :( con error -> ");
       Serial.print(client.state());
@@ -190,15 +178,25 @@ void reconnect() {
 //*****************************
 // Funcion para recibir mensajes del broker
 void callback(char* topic, byte* payload, unsigned int length){
+  // Imprime en consola el mensaje recibido desde el pc
   String incoming = "";
-  Serial.print("Mensaje recibido desde -> ");
+  Serial.print("Mensaje recibido [");
   Serial.print(topic);
-  Serial.println("");
-  // Recuperar caracter por caracter del mensaje recibido del broker
-  for (int i = 0; i < length; i++) {
-    incoming += (char)payload[i];
-  }
-  incoming.trim();
-  Serial.println("Mensaje broker -> " + incoming);
+  Serial.print("] ");
+ 
+ char payload_string[length + 1];
+  
+  int resultI;
+// Organiza la información resibida 
+  memcpy(payload_string, payload, length);
+  payload_string[length] = '\0';
+  resultI = atoi(payload_string);
+  var = resultI;
 
+  resultS = "";
+  // Concatena caractera caracter el mensaje recibido 
+  for (int i=0;i<length;i++) {
+    resultS= resultS + (char)payload[i];
+  }
+  Serial.println();
 }
